@@ -10,57 +10,66 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: 20
 
       - name: Set up Java
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Prepare Project Dependencies
+      - name: Prepare Web Files (www)
         run: |
-          # التأكد من نظافة البيئة وإنشاء الملفات الأساسية
-          if [ ! -f package.json ]; then
-            echo '{"name": "x1-app", "version": "1.0.0", "dependencies": {}}' > package.json
-          fi
+          # إنشاء مجلد www إذا لم يكن موجوداً
+          mkdir -p www
           
-          # تثبيت المكتبات المحددة للإصدار 5 لضمان التوافق
-          npm install @capacitor/core@5 @capacitor/cli@5 @capacitor/android@5 --quiet
+          # إذا كان ملف index.html موجوداً في المسار الرئيسي، قم بنسخ ملفات الموقع إلى www
+          # نتجاهل نسخ المجلدات الخاصة بـ git و node_modules لتجنب تضخم التطبيق
+          if [ -f index.html ]; then
+            rsync -av --exclude='www' --exclude='.git' --exclude='node_modules' --exclude='.github' ./ www/
+          else
+            echo "<html><body><h1>مرحباً بك في تطبيق X1</h1><p>الرجاء رفع ملفات موقعك هنا.</p></body></html>" > www/index.html
+          fi
 
-      - name: Initialize & Sync Android
+      - name: Install Capacitor Dependencies
         run: |
-          # إعداد ملف التكوين إذا لم يكن موجوداً
-          if [ ! -f capacitor.config.json ]; then
-            echo '{"appId": "com.x1.app", "appName": "X1 System", "webDir": "."}' > capacitor.config.json
-          fi
-          
-          # حذف أي بناء قديم وإعادة التهيئة
-          rm -rf android
+          npm init -y
+          # تثبيت المكتبات الأساسية لـ Capacitor
+          npm install @capacitor/core @capacitor/android
+          npm install -D @capacitor/cli
+
+      - name: Initialize Capacitor Config
+        run: |
+          # إنشاء ملف الإعدادات وتوجيهه إلى مجلد www بدلاً من المسار الرئيسي
+          cat <<EOF > capacitor.config.json
+          {
+            "appId": "com.x1.app",
+            "appName": "X1 System",
+            "webDir": "www",
+            "bundledWebRuntime": false
+          }
+          EOF
+
+      - name: Add & Sync Android Platform
+        run: |
           npx cap add android
-          
-          # التأكد من وجود ملف index.html
-          if [ ! -f index.html ]; then
-             echo "<html><body><h1>X1 Mobile System</h1></body></html>" > index.html
-          fi
-          
           npx cap sync android
 
       - name: Build Android APK
         run: |
           cd android
-          # إعطاء صلاحية التنفيذ لمحرك Gradle
+          # إعطاء صلاحية التشغيل لملف gradlew
           chmod +x gradlew
-          # تنظيف وبناء نسخة الـ Debug
-          ./gradlew clean assembleDebug
+          # بناء التطبيق
+          ./gradlew assembleDebug
 
       - name: Upload APK Result
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: Android-App-Success
           path: android/app/build/outputs/apk/debug/app-debug.apk
