@@ -23,29 +23,43 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Prepare Project
+      - name: Prepare Project Dependencies
         run: |
+          # التأكد من نظافة البيئة وإنشاء الملفات الأساسية
           if [ ! -f package.json ]; then
             echo '{"name": "x1-app", "version": "1.0.0", "dependencies": {}}' > package.json
           fi
-          npm install @capacitor/core@5 @capacitor/cli@5 @capacitor/android@5
+          
+          # تثبيت المكتبات المحددة للإصدار 5 لضمان التوافق
+          npm install @capacitor/core@5 @capacitor/cli@5 @capacitor/android@5 --quiet
 
-      - name: Initialize Android Platform
+      - name: Initialize & Sync Android
         run: |
+          # إعداد ملف التكوين إذا لم يكن موجوداً
           if [ ! -f capacitor.config.json ]; then
             echo '{"appId": "com.x1.app", "appName": "X1 System", "webDir": "."}' > capacitor.config.json
           fi
+          
+          # حذف أي بناء قديم وإعادة التهيئة
           rm -rf android
           npx cap add android
+          
+          # التأكد من وجود ملف index.html
+          if [ ! -f index.html ]; then
+             echo "<html><body><h1>X1 Mobile System</h1></body></html>" > index.html
+          fi
+          
           npx cap sync android
 
-      - name: Build APK (Debug Version)
+      - name: Build Android APK
         run: |
           cd android
+          # إعطاء صلاحية التنفيذ لمحرك Gradle
           chmod +x gradlew
-          ./gradlew assembleDebug
+          # تنظيف وبناء نسخة الـ Debug
+          ./gradlew clean assembleDebug
 
-      - name: Upload Finished APK
+      - name: Upload APK Result
         uses: actions/upload-artifact@v3
         with:
           name: Android-App-Success
