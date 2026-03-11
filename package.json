@@ -1,0 +1,13 @@
+{
+  "appId": "com.x1.mobilesystem",
+  "appName": "x1 Mobile System",
+  "webDir": ".",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": true,
+    "captureInput": true
+  }
+}
