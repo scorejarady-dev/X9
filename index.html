@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>x1 - نظام إدارة الفواتير</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#6366f1',
+                        secondary: '#a855f7',
+                        darkBg: '#0f172a',
+                        darkCard: '#1e293b'
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- Fonts & Icons -->
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;900&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <!-- html2canvas for Image Export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+    <style>
+        body { 
+            font-family: 'Cairo', sans-serif; 
+            -webkit-tap-highlight-color: transparent;
+            transition: background-color 0.3s ease;
+        }
+        
+        /* Glassmorphism */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.05);
+        }
+        .dark .glass-card {
+            background: rgba(30, 41, 59, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .gradient-bg { background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%); }
+        .dark .gradient-bg { background: linear-gradient(135deg, #4f46e5 0%, #7e22ce 100%); }
+        .gradient-text { 
+            background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .dark ::-webkit-scrollbar-thumb { background: #475569; }
+
+        /* Print Styles */
+        @media print {
+            body { background: white !important; }
+            body * { visibility: hidden; }
+            #printable-receipt, #printable-receipt * { visibility: visible; }
+            #printable-receipt {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 80mm;
+                margin: 0;
+                padding: 0;
+                box-shadow: none !important;
+                border: none !important;
+            }
+        }
+
+        /* Receipt Background Pattern */
+        .receipt-pattern {
+            background-color: white;
+            background-image: radial-gradient(#cbd5e1 1px, transparent 1px);
+            background-size: 10px 10px;
+        }
+        
+        /* Smooth View Transitions */
+        .fade-in { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 dark:bg-darkBg dark:text-slate-100 min-h-screen flex flex-col">
+
+    <!-- ================= AUTHENTICATION VIEW ================= -->
+    <div id="auth-view" class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-100 dark:bg-slate-900 p-4 transition-opacity duration-300">
+        <div class="absolute inset-0 overflow-hidden pointer-events-none">
+            <div class="absolute -top-[20%] -right-[10%] w-[70%] h-[70%] rounded-full bg-indigo-500/20 blur-[100px]"></div>
+            <div class="absolute -bottom-[20%] -left-[10%] w-[70%] h-[70%] rounded-full bg-purple-500/20 blur-[100px]"></div>
+        </div>
+
+        <div class="glass-card w-full max-w-md p-8 rounded-3xl relative z-10 fade-in">
+            <div class="text-center mb-8">
+                <div class="w-16 h-16 gradient-bg rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-xl shadow-indigo-500/30 text-white">
+                    <i data-lucide="zap" class="w-8 h-8"></i>
+                </div>
+                <h1 class="text-3xl font-black tracking-tighter gradient-text">x1 System</h1>
+                <p class="text-slate-500 dark:text-slate-400 text-sm mt-2 font-semibold">بوابتك لإدارة مبيعاتك بذكاء</p>
+            </div>
+
+            <!-- Login Form -->
+            <form id="form-login" class="space-y-4" onsubmit="event.preventDefault(); App.auth.login();">
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 mb-1">رقم الهاتف</label>
+                    <div class="relative">
+                        <i data-lucide="phone" class="absolute right-3 top-3 w-5 h-5 text-slate-400"></i>
+                        <input id="login-phone" type="tel" class="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl py-3 pr-10 pl-4 focus:ring-2 focus:ring-indigo-500 outline-none transition-all dark:text-white" placeholder="05xxxxxxxx" required>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 mb-1">كلمة المرور</label>
+                    <div class="relative">
+                        <i data-lucide="lock" class="absolute right-3 top-3 w-5 h-5 text-slate-400"></i>
+                        <input id="login-password" type="password" class="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl py-3 pr-10 pl-4 focus:ring-2 focus:ring-indigo-500 outline-none transition-all dark:text-white" placeholder="••••••••" required>
+                    </div>
+                </div>
+                <button type="submit" class="w-full gradient-bg text-white font-bold py-3.5 rounded-xl shadow-lg hover:opacity-90 transition-all mt-4">تسجيل الدخول</button>
+                <p class="text-center text-sm text-slate-500 mt-4">
+                    ليس لديك حساب؟ <a href="#" onclick="App.auth.toggleMode('register')" class="text-indigo-600 dark:text-indigo-400 font-bold hover:underline">إنشاء حساب جديد</a>
+                </p>
+            </form>
+
+            <!-- Register Form (Hidden initially) -->
+            <form id="form-register" class="space-y-4 hidden" onsubmit="event.preventDefault(); App.auth.register();">
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 mb-1">الاسم الكامل / اسم المتجر</label>
+                    <div class="relative">
+                        <i data-lucide="user" class="absolute right-3 top-3 w-5 h-5 text-slate-400"></i>
+                        <input id="reg-name" type="text" class="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl py-3 pr-10 pl-4 focus:ring-2 focus:ring-indigo-500 outline-none transition-all dark:text-white" placeholder="اسمك التجاري" required>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 mb-1">رقم الهاتف</label>
+                    <div class="relative">
+                        <i data-lucide="phone" class="absolute right-3 top-3 w-5 h-5 text-slate-400"></i>
+                        <input id="reg-phone" type="tel" class="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl py-3 pr-10 pl-4 focus:ring-2 focus:ring-indigo-500 outline-none transition-all dark:text-white" placeholder="05xxxxxxxx" required>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 mb-1">كلمة المرور</label>
+                    <div class="relative">
+                        <i data-lucide="lock" class="absolute right-3 top-3 w-5 h-5 text-slate-400"></i>
+                        <input id="reg-password" type="password" class="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl py-3 pr-10 pl-4 focus:ring-2 focus:ring-indigo-500 outline-none transition-all dark:text-white" placeholder="••••••••" required>
+                    </div>
+                </div>
+                <button type="submit" class="w-full bg-slate-800 dark:bg-white text-white dark:text-slate-900 font-bold py-3.5 rounded-xl shadow-lg hover:scale-[1.02] transition-transform mt-4">إنشاء الحساب</button>
+                <p class="text-center text-sm text-slate-500 mt-4">
+                    لديك حساب بالفعل؟ <a href="#" onclick="App.auth.toggleMode('login')" class="text-indigo-600 dark:text-indigo-400 font-bold hover:underline">تسجيل الدخول</a>
+                </p>
+            </form>
+            
+            <div id="auth-error" class="mt-4 p-3 bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 rounded-lg text-sm font-bold text-center hidden"></div>
+        </div>
+    </div>
+
+    <!-- ================= MAIN APPLICATION VIEW ================= -->
+    <div id="app-view" class="hidden flex-1 flex flex-col pb-20 md:pb-0">
+        
+        <!-- Header -->
+        <header class="glass-card sticky top-0 z-40 rounded-b-3xl mb-6 mx-4 md:mx-auto md:max-w-7xl md:w-full mt-4">
+            <div class="px-4 h-16 md:h-20 flex justify-between items-center">
+                <div class="flex items-center gap-3">
+                    <div class="gradient-bg p-2 md:p-3 rounded-xl shadow-md text-white">
+                        <i data-lucide="zap" class="w-5 h-5 md:w-6 md:h-6"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-xl md:text-2xl font-black tracking-tighter gradient-text">x1</h1>
+                        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest" id="header-user-name">المستخدم</p>
+                    </div>
+                </div>
+                
+                <!-- Desktop Navigation -->
+                <nav class="hidden md:flex bg-slate-100/50 dark:bg-slate-800/50 rounded-2xl p-1 border border-slate-200 dark:border-slate-700">
+                    <button onclick="App.nav.switchTab('billing')" id="tab-billing" class="tab-btn px-6 py-2 rounded-xl text-sm font-bold bg-white dark:bg-slate-700 shadow-sm text-indigo-600 dark:text-indigo-400">الفوترة</button>
+                    <button onclick="App.nav.switchTab('inventory')" id="tab-inventory" class="tab-btn px-6 py-2 rounded-xl text-sm font-bold text-slate-500 hover:text-indigo-600">المخزن</button>
+                    <button onclick="App.nav.switchTab('history')" id="tab-history" class="tab-btn px-6 py-2 rounded-xl text-sm font-bold text-slate-500 hover:text-indigo-600">الفواتير</button>
+                    <button onclick="App.nav.switchTab('account')" id="tab-account" class="tab-btn px-6 py-2 rounded-xl text-sm font-bold text-slate-500 hover:text-indigo-600">الحساب</button>
+                </nav>
+
+                <div class="flex items-center gap-2">
+                    <button onclick="App.ui.toggleTheme()" class="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500" title="تغيير المظهر">
+                        <i data-lucide="moon" id="theme-icon"></i>
+                    </button>
+                    <button onclick="App.auth.logout()" class="p-2 rounded-xl hover:bg-rose-50 dark:hover:bg-rose-900/20 text-rose-500" title="تسجيل الخروج">
+                        <i data-lucide="log-out"></i>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Layout Grid -->
+        <main class="max-w-7xl mx-auto px-4 w-full grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1">
+            
+            <!-- Left Side: Tabs Content (8 cols) -->
+            <div class="lg:col-span-8 space-y-6 relative min-h-[500px]">
+                
+                <!-- Tab: Billing -->
+                <div id="view-billing" class="view-section fade-in">
+                    <div class="glass-card rounded-[2rem] p-5 md:p-6 mb-6">
+                        <div class="flex justify-between items-center mb-5">
+                            <h2 class="text-lg md:text-xl font-bold flex items-center gap-2"><i data-lucide="plus-circle" class="text-indigo-500"></i> منتج جديد</h2>
+                            <span class="text-xs bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400 px-3 py-1.5 rounded-full font-bold font-mono" id="current-invoice-id">INV-0000</span>
+                        </div>
+
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+                            <div class="col-span-2">
+                                <label class="text-[10px] font-bold text-slate-400 uppercase mr-1">المنتج</label>
+                                <input id="in-name" type="text" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-all dark:text-white" placeholder="اسم المنتج...">
+                            </div>
+                            <div>
+                                <label class="text-[10px] font-bold text-slate-400 uppercase mr-1">السعر</label>
+                                <input id="in-price" type="number" step="0.01" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-sm focus:border-indigo-500 outline-none transition-all dark:text-white" placeholder="0.00">
+                            </div>
+                            <div>
+                                <label class="text-[10px] font-bold text-slate-400 uppercase mr-1">الكمية</label>
+                                <input id="in-qty" type="number" value="1" min="1" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-sm focus:border-indigo-500 outline-none transition-all dark:text-white">
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3 mt-4">
+                            <button onclick="App.billing.addItem()" class="flex-grow gradient-bg text-white font-bold py-3 rounded-xl hover:opacity-90 active:scale-95 transition-all shadow-lg flex justify-center items-center gap-2">
+                                <i data-lucide="shopping-cart" class="w-5 h-5"></i> إضافة للفاتورة
+                            </button>
+                            <button onclick="App.inventory.saveFromInput()" class="p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl active:scale-95 transition-transform text-indigo-600 dark:text-indigo-400" title="حفظ في المخزن السريع">
+                                <i data-lucide="package-plus"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="glass-card rounded-[2rem] p-5 md:p-6">
+                        <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-5 gap-3">
+                            <h2 class="text-lg md:text-xl font-bold">عناصر الفاتورة</h2>
+                            <div class="flex items-center gap-2 w-full md:w-auto">
+                                <button onclick="App.billing.saveInvoice()" class="flex-1 md:flex-none bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400 px-4 py-2.5 rounded-xl font-bold text-sm hover:bg-emerald-100 transition-colors flex items-center justify-center gap-2">
+                                    <i data-lucide="save" class="w-4 h-4"></i> حفظ
+                                </button>
+                                <span id="grand-total" class="flex-1 md:flex-none text-center bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-4 py-2.5 rounded-xl font-black text-lg shadow-md">0.00 ر.س</span>
+                            </div>
+                        </div>
+                        <div id="items-list" class="space-y-3 min-h-[150px] max-h-[300px] overflow-y-auto pr-1">
+                            <!-- Items will be injected here -->
+                            <div class="text-center text-slate-400 py-8 text-sm flex flex-col items-center">
+                                <i data-lucide="inbox" class="w-8 h-8 mb-2 opacity-50"></i>
+                                الفاتورة فارغة حالياً
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab: Inventory -->
+                <div id="view-inventory" class="view-section hidden fade-in">
+                    <div class="glass-card rounded-[2rem] p-5 md:p-6">
+                        <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+                            <div>
+                                <h2 class="text-lg md:text-xl font-bold text-indigo-600 dark:text-indigo-400">المخزن الذكي</h2>
+                                <p class="text-xs text-slate-400">انقر على المنتج لإضافته للفاتورة مباشرة</p>
+                            </div>
+                            <div class="relative w-full md:w-64">
+                                <i data-lucide="search" class="absolute right-3 top-3 w-4 h-4 text-slate-400"></i>
+                                <input oninput="App.inventory.render(this.value)" type="text" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl py-2 pr-9 pl-3 text-sm focus:border-indigo-500 outline-none dark:text-white" placeholder="ابحث في المخزن...">
+                            </div>
+                        </div>
+                        <div id="inventory-grid" class="grid grid-cols-2 md:grid-cols-3 gap-3">
+                            <!-- Inventory items injected here -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab: History -->
+                <div id="view-history" class="view-section hidden fade-in">
+                    <div class="glass-card rounded-[2rem] p-5 md:p-6">
+                        <h2 class="text-lg md:text-xl font-bold mb-5">سجل الفواتير المحفوظة</h2>
+                        <div class="overflow-x-auto rounded-xl border border-slate-100 dark:border-slate-800">
+                            <table class="w-full text-right text-sm whitespace-nowrap">
+                                <thead class="bg-slate-50 dark:bg-slate-800/50 text-slate-500 text-xs">
+                                    <tr>
+                                        <th class="p-3 md:p-4">رقم الفاتورة</th>
+                                        <th class="p-3 md:p-4">التاريخ</th>
+                                        <th class="p-3 md:p-4">الإجمالي</th>
+                                        <th class="p-3 md:p-4 text-center">إجراء</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="history-list" class="divide-y divide-slate-100 dark:divide-slate-800">
+                                    <!-- History items injected here -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab: Account -->
+                <div id="view-account" class="view-section hidden fade-in">
+                    <div class="glass-card rounded-[2rem] p-5 md:p-6">
+                        <h2 class="text-lg md:text-xl font-bold mb-6 border-b pb-4 dark:border-slate-700 flex items-center gap-2">
+                            <i data-lucide="user-cog" class="text-indigo-500"></i> إعدادات الحساب
+                        </h2>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                            <div>
+                                <label class="text-xs font-bold text-slate-400 mb-1 block">اسم المتجر / المسؤول</label>
+                                <input id="acc-name" type="text" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-3 outline-none dark:text-white">
+                            </div>
+                            <div>
+                                <label class="text-xs font-bold text-slate-400 mb-1 block">نص العلامة المائية للإيصال</label>
+                                <input id="acc-watermark" type="text" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-3 outline-none dark:text-white" placeholder="مثال: متجر الهدايا">
+                            </div>
+                        </div>
+                        <div class="mt-6 flex justify-end">
+                            <button onclick="App.ui.saveAccountSettings()" class="gradient-bg text-white px-8 py-3 rounded-xl font-bold shadow-lg hover:opacity-90 active:scale-95 transition-all w-full md:w-auto">حفظ التغييرات</button>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Right Side: Receipt Preview & Actions (4 cols) -->
+            <div class="lg:col-span-4 flex flex-col gap-4">
+                
+                <!-- Action Buttons -->
+                <div class="glass-card rounded-[1.5rem] p-3 flex gap-2 no-print shadow-sm z-10 sticky top-[88px]">
+                    <button onclick="App.print.doPrint()" class="flex-1 bg-slate-900 dark:bg-white text-white dark:text-slate-900 py-2.5 rounded-xl font-bold flex justify-center items-center gap-2 active:scale-95 transition-transform text-sm">
+                        <i data-lucide="printer" class="w-4 h-4"></i> طباعة
+                    </button>
+                    <button onclick="App.print.doExport()" class="flex-1 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 py-2.5 rounded-xl font-bold flex justify-center items-center gap-2 active:scale-95 transition-transform border border-indigo-100 dark:border-indigo-800 text-sm">
+                        <i data-lucide="image" class="w-4 h-4"></i> صورة
+                    </button>
+                    <button onclick="App.billing.clear()" class="p-2.5 bg-rose-50 dark:bg-rose-900/20 text-rose-500 rounded-xl active:scale-95 transition-transform" title="إفراغ الفاتورة">
+                        <i data-lucide="trash-2" class="w-5 h-5"></i>
+                    </button>
+                </div>
+
+                <!-- Receipt Preview Container -->
+                <div class="glass-card rounded-[2rem] p-4 shadow-xl flex-1 flex flex-col">
+                    <h3 class="text-center text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 no-print flex items-center justify-center gap-1">
+                        <i data-lucide="eye" class="w-3 h-3"></i> معاينة الإيصال (80mm)
+                    </h3>
+                    
+                    <div class="flex-1 overflow-y-auto flex justify-center items-start pb-4 no-print-bg">
+                        <!-- THE ACTUAL RECEIPT -->
+                        <div id="printable-receipt" class="bg-white text-black font-mono leading-tight relative overflow-hidden receipt-pattern" style="width: 80mm; min-height: 100mm; padding: 5mm; border: 1px solid #e2e8f0;">
+                            
+                            <!-- Watermark -->
+                            <div class="absolute inset-0 flex items-center justify-center pointer-events-none z-0 overflow-hidden">
+                                <span id="rec-watermark" class="text-5xl font-black text-slate-100 transform -rotate-45 whitespace-nowrap opacity-50">x1 System</span>
+                            </div>
+
+                            <!-- Top ZigZag -->
+                            <svg class="w-full h-2 text-slate-800 mb-4 relative z-10" viewBox="0 0 100 10" preserveAspectRatio="none">
+                                <path d="M0,0 L10,10 L20,0 L30,10 L40,0 L50,10 L60,0 L70,10 L80,0 L90,10 L100,0 L100,10 L0,10 Z" fill="currentColor"/>
+                            </svg>
+
+                            <div class="text-center mb-5 relative z-10">
+                                <h1 class="text-2xl font-black mb-1" id="rec-store-name">x1</h1>
+                                <p class="text-[10px] text-slate-600 font-bold mb-1">فاتورة ضريبية مبسطة</p>
+                                <div class="flex justify-between items-center text-[9px] text-slate-600 border-b border-dashed border-slate-400 pb-2 mb-2">
+                                    <span>رقم: <span id="rec-number" class="font-bold">0000</span></span>
+                                    <span id="rec-date">00/00/0000</span>
+                                </div>
+                            </div>
+
+                            <div class="relative z-10 w-full mb-4 min-h-[50mm]">
+                                <table class="w-full text-[11px] text-right">
+                                    <thead>
+                                        <tr class="border-b-2 border-black font-bold">
+                                            <th class="py-1 w-1/2">الصنف</th>
+                                            <th class="py-1 text-center">الكمية</th>
+                                            <th class="py-1 text-left">المجموع</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="rec-items" class="divide-y divide-dashed divide-slate-300">
+                                        <!-- Receipt items -->
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div class="border-t-2 border-black pt-2 mb-6 relative z-10 flex flex-col items-end">
+                                <div class="flex justify-between w-full font-black text-lg">
+                                    <span>الإجمالي</span>
+                                    <span><span id="rec-total">0.00</span> <span class="text-[10px]">ر.س</span></span>
+                                </div>
+                            </div>
+
+                            <div class="text-center text-[9px] relative z-10 border-t border-dashed border-slate-400 pt-3 mt-auto">
+                                <p class="font-bold mb-1 text-[11px]">شكراً لزيارتكم</p>
+                                <p class="text-slate-600" id="rec-footer-name">البائع: مستخدم</p>
+                                <!-- Barcode Mockup -->
+                                <div class="flex justify-center mt-3 h-6 opacity-80" style="background: repeating-linear-gradient(90deg, #000, #000 2px, transparent 2px, transparent 4px, #000 4px, #000 5px, transparent 5px, transparent 8px); width: 70%; margin: 8px auto 0;"></div>
+                            </div>
+
+                            <!-- Bottom ZigZag -->
+                            <svg class="w-full h-2 text-slate-800 mt-4 absolute bottom-0 left-0 z-10" viewBox="0 0 100 10" preserveAspectRatio="none">
+                                <path d="M0,10 L10,0 L20,10 L30,0 L40,10 L50,0 L60,10 L70,0 L80,10 L90,0 L100,10 L100,0 L0,0 Z" fill="currentColor"/>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Mobile Bottom Navigation Bar -->
+        <nav class="md:hidden fixed bottom-0 left-0 right-0 glass-card rounded-t-[2rem] border-t border-slate-200 dark:border-slate-800 z-50 px-6 py-3 pb-safe">
+            <div class="flex justify-between items-center">
+                <button onclick="App.nav.switchTab('billing')" id="mob-tab-billing" class="mob-tab flex flex-col items-center gap-1 text-indigo-600 dark:text-indigo-400">
+                    <i data-lucide="calculator" class="w-6 h-6"></i>
+                    <span class="text-[10px] font-bold">الفاتورة</span>
+                </button>
+                <button onclick="App.nav.switchTab('inventory')" id="mob-tab-inventory" class="mob-tab flex flex-col items-center gap-1 text-slate-400 hover:text-indigo-500 transition-colors">
+                    <i data-lucide="package" class="w-6 h-6"></i>
+                    <span class="text-[10px] font-bold">المخزن</span>
+                </button>
+                <button onclick="App.nav.switchTab('history')" id="mob-tab-history" class="mob-tab flex flex-col items-center gap-1 text-slate-400 hover:text-indigo-500 transition-colors">
+                    <i data-lucide="clock" class="w-6 h-6"></i>
+                    <span class="text-[10px] font-bold">السجل</span>
+                </button>
+                <button onclick="App.nav.switchTab('account')" id="mob-tab-account" class="mob-tab flex flex-col items-center gap-1 text-slate-400 hover:text-indigo-500 transition-colors">
+                    <i data-lucide="user" class="w-6 h-6"></i>
+                    <span class="text-[10px] font-bold">حسابي</span>
+                </button>
+            </div>
+        </nav>
+    </div>
+
+    <!-- Application Logic -->
+    <script>
+        // === IN-MEMORY DATABASE (Resets on app close, perfect for fast offline session) ===
+        const DB = {
+            users: [], // { phone, password, name, watermark }
+            invoices: [], // { id, userId, date, items, total }
+            inventory: [ // Default products
+                { id: 1, name: 'خدمة عامة', price: 50 },
+                { id: 2, name: 'منتج أ', price: 100 }
+            ] 
+        };
+
+        const App = {
+            state: {
+                currentUser: null,
+                theme: 'light',
+                currentInvoiceId: '',
+                currentItems: []
+            },
+
+            init() {
+                lucide.createIcons();
+                // Check if there's an active session in memory (mostly for Dev reloads, 
+                // but since it's pure memory it will always show login first on fresh open)
+                if (this.state.currentUser) {
+                    this.ui.showApp();
+                } else {
+                    this.ui.showAuth();
+                }
+            },
+
+            auth: {
+                toggleMode(mode) {
+                    const loginForm = document.getElementById('form-login');
+                    const regForm = document.getElementById('form-register');
+                    const errorBox = document.getElementById('auth-error');
+                    errorBox.classList.add('hidden');
+
+                    if (mode === 'register') {
+                        loginForm.classList.add('hidden');
+                        regForm.classList.remove('hidden');
+                    } else {
+                        regForm.classList.add('hidden');
+                        loginForm.classList.remove('hidden');
+                    }
+                },
+                
+                showError(msg) {
+                    const errorBox = document.getElementById('auth-error');
+                    errorBox.innerText = msg;
+                    errorBox.classList.remove('hidden');
+                },
+
+                register() {
+                    const name = document.getElementById('reg-name').value;
+                    const phone = document.getElementById('reg-phone').value;
+                    const pass = document.getElementById('reg-password').value;
+
+                    if(DB.users.find(u => u.phone === phone)) {
+                        this.showError('رقم الهاتف مسجل مسبقاً!');
+                        return;
+                    }
+
+                    const newUser = { phone, password: pass, name, watermark: name };
+                    DB.users.push(newUser);
+                    
+                    // Auto Login after register
+                    App.state.currentUser = newUser;
+                    App.ui.showApp();
+                },
+
+                login() {
+                    const phone = document.getElementById('login-phone').value;
+                    const pass = document.getElementById('login-password').value;
+
+                    const user = DB.users.find(u => u.phone === phone && u.password === pass);
+                    
+                    if (user) {
+                        App.state.currentUser = user;
+                        App.ui.showApp();
+                    } else {
+                        this.showError('رقم الهاتف أو كلمة المرور غير صحيحة');
+                    }
+                },
+
+                logout() {
+                    App.state.currentUser = null;
+                    App.ui.showAuth();
+                    document.getElementById('login-password').value = '';
+                }
+            },
+
+            nav: {
+                switchTab(tabId) {
+                    // Hide all sections
+                    document.querySelectorAll('.view-section').forEach(el => {
+                        el.classList.add('hidden');
+                        el.classList.remove('fade-in');
+                    });
+                    
+                    // Show target
+                    const target = document.getElementById(`view-${tabId}`);
+                    target.classList.remove('hidden');
+                    // Trigger reflow for animation
+                    void target.offsetWidth; 
+                    target.classList.add('fade-in');
+
+                    // Update Desktop Tabs
+                    document.querySelectorAll('.tab-btn').forEach(btn => {
+                        btn.className = "tab-btn px-6 py-2 rounded-xl text-sm font-bold text-slate-500 hover:text-indigo-600 transition-colors";
+                    });
+                    document.getElementById(`tab-${tabId}`).className = "tab-btn px-6 py-2 rounded-xl text-sm font-bold bg-white dark:bg-slate-700 shadow-sm text-indigo-600 dark:text-indigo-400 transition-colors";
+
+                    // Update Mobile Tabs
+                    document.querySelectorAll('.mob-tab').forEach(btn => {
+                        btn.className = "mob-tab flex flex-col items-center gap-1 text-slate-400 hover:text-indigo-500 transition-colors";
+                    });
+                    document.getElementById(`mob-tab-${tabId}`).className = "mob-tab flex flex-col items-center gap-1 text-indigo-600 dark:text-indigo-400 transition-colors";
+
+                    // Load specific data
+                    if(tabId === 'history') App.history.render();
+                    if(tabId === 'inventory') App.inventory.render();
+                }
+            },
+
+            billing: {
+                startNew() {
+                    App.state.currentInvoiceId = 'INV-' + Math.floor(Math.random() * 9000 + 1000);
+                    App.state.currentItems = [];
+                    document.getElementById('current-invoice-id').innerText = App.state.currentInvoiceId;
+                    this.updateUI();
+                },
+
+                addItem() {
+                    const name = document.getElementById('in-name').value;
+                    const price = parseFloat(document.getElementById('in-price').value);
+                    const qty = parseInt(document.getElementById('in-qty').value) || 1;
+
+                    if (!name || isNaN(price) || price <= 0) {
+                        alert('يرجى إدخال اسم منتج وسعر صحيح');
+                        return;
+                    }
+
+                    App.state.currentItems.push({ 
+                        id: Date.now(), 
+                        name, 
+                        price, 
+                        qty, 
+                        total: price * qty 
+                    });
+                    
+                    document.getElementById('in-name').value = '';
+                    document.getElementById('in-price').value = '';
+                    document.getElementById('in-qty').value = '1';
+                    document.getElementById('in-name').focus();
+                    
+                    this.updateUI();
+                },
+
+                removeItem(id) {
+                    App.state.currentItems = App.state.currentItems.filter(i => i.id !== id);
+                    this.updateUI();
+                },
+
+                clear() {
+                    if(App.state.currentItems.length > 0 && confirm('هل أنت متأكد من مسح الفاتورة الحالية؟')) {
+                        this.startNew();
+                    }
+                },
+
+                saveInvoice() {
+                    if (App.state.currentItems.length === 0) {
+                        alert('لا يمكن حفظ فاتورة فارغة');
+                        return;
+                    }
+                    
+                    const total = App.state.currentItems.reduce((sum, item) => sum + item.total, 0);
+                    const newInvoice = {
+                        id: App.state.currentInvoiceId,
+                        userId: App.state.currentUser.phone,
+                        date: new Date().toLocaleString('ar-EG', { dateStyle: 'short', timeStyle: 'short' }),
+                        items: [...App.state.currentItems],
+                        total: total
+                    };
+
+                    DB.invoices.unshift(newInvoice); // Add to top
+                    alert('تم حفظ الفاتورة بنجاح!');
+                    App.nav.switchTab('history');
+                    this.startNew(); // Reset for next customer
+                },
+
+                updateUI() {
+                    const list = document.getElementById('items-list');
+                    const recList = document.getElementById('rec-items');
+                    let total = 0;
+
+                    if (App.state.currentItems.length === 0) {
+                        list.innerHTML = `
+                            <div class="text-center text-slate-400 py-8 text-sm flex flex-col items-center">
+                                <i data-lucide="inbox" class="w-8 h-8 mb-2 opacity-50"></i> الفاتورة فارغة حالياً
+                            </div>`;
+                        recList.innerHTML = '';
+                    } else {
+                        list.innerHTML = '';
+                        recList.innerHTML = '';
+
+                        App.state.currentItems.forEach(item => {
+                            total += item.total;
+                            
+                            // App UI Row
+                            list.innerHTML += `
+                                <div class="flex justify-between items-center p-3 md:p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-700">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-8 h-8 md:w-10 md:h-10 bg-indigo-100 text-indigo-600 dark:bg-indigo-900/40 dark:text-indigo-400 rounded-lg flex items-center justify-center font-bold text-sm">${item.qty}</div>
+                                        <div>
+                                            <div class="font-bold text-sm md:text-base dark:text-white">${item.name}</div>
+                                            <div class="text-[10px] md:text-xs text-slate-400">${item.price} ر.س</div>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center gap-3">
+                                        <div class="font-black text-sm md:text-base text-indigo-600 dark:text-indigo-400">${item.total.toFixed(2)}</div>
+                                        <button onclick="App.billing.removeItem(${item.id})" class="text-rose-400 hover:text-rose-600 transition-colors p-1">
+                                            <i data-lucide="x-circle" class="w-5 h-5"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            `;
+
+                            // Receipt Row
+                            recList.innerHTML += `
+                                <tr>
+                                    <td class="py-1 font-bold whitespace-nowrap overflow-hidden text-ellipsis max-w-[40mm]">${item.name}</td>
+                                    <td class="py-1 text-center">${item.qty}</td>
+                                    <td class="py-1 text-left font-bold">${item.total.toFixed(2)}</td>
+                                </tr>
+                            `;
+                        });
+                    }
+
+                    // Update Totals & Meta
+                    document.getElementById('grand-total').innerText = `${total.toFixed(2)} ر.س`;
+                    document.getElementById('rec-total').innerText = total.toFixed(2);
+                    document.getElementById('rec-number').innerText = App.state.currentInvoiceId.replace('INV-', '');
+                    
+                    const now = new Date();
+                    document.getElementById('rec-date').innerText = now.toLocaleString('ar-EG', { dateStyle: 'short', timeStyle: 'short' });
+                    
+                    lucide.createIcons();
+                }
+            },
+
+            inventory: {
+                saveFromInput() {
+                    const name = document.getElementById('in-name').value;
+                    const price = parseFloat(document.getElementById('in-price').value);
+                    if (!name || isNaN(price)) {
+                        alert('أدخل اسم وسعر لحفظه في المخزن'); return;
+                    }
+                    
+                    // Prevent duplicate names
+                    if(!DB.inventory.find(p => p.name === name)) {
+                        DB.inventory.push({ id: Date.now(), name, price });
+                        alert('تم الحفظ في المخزن');
+                    } else {
+                        alert('المنتج موجود مسبقاً في المخزن');
+                    }
+                },
+
+                render(filter = '') {
+                    const grid = document.getElementById('inventory-grid');
+                    grid.innerHTML = '';
+                    const filtered = DB.inventory.filter(p => p.name.includes(filter));
+                    
+                    if(filtered.length === 0) {
+                        grid.innerHTML = `<div class="col-span-full text-center text-slate-400 py-4 text-sm">لا يوجد منتجات مطابقة</div>`;
+                        return;
+                    }
+
+                    filtered.forEach(p => {
+                        grid.innerHTML += `
+                            <div onclick="App.inventory.addToBill('${p.name}', ${p.price})" class="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl cursor-pointer hover:border-indigo-500 border border-transparent transition-all flex flex-col items-center justify-center text-center gap-2 group active:scale-95">
+                                <div class="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-500 flex items-center justify-center mb-1 group-hover:scale-110 transition-transform">
+                                    <i data-lucide="package" class="w-5 h-5"></i>
+                                </div>
+                                <div class="font-bold text-sm dark:text-white line-clamp-1">${p.name}</div>
+                                <div class="text-xs font-black text-indigo-600 dark:text-indigo-400">${p.price} ر.س</div>
+                            </div>
+                        `;
+                    });
+                    lucide.createIcons();
+                },
+
+                addToBill(name, price) {
+                    document.getElementById('in-name').value = name;
+                    document.getElementById('in-price').value = price;
+                    document.getElementById('in-qty').value = 1;
+                    App.nav.switchTab('billing');
+                }
+            },
+
+            history: {
+                render() {
+                    const list = document.getElementById('history-list');
+                    list.innerHTML = '';
+                    
+                    // Filter invoices by current user
+                    const userInvoices = DB.invoices.filter(i => i.userId === App.state.currentUser.phone);
+
+                    if(userInvoices.length === 0) {
+                        list.innerHTML = '<tr><td colspan="4" class="text-center py-8 text-slate-400">لا يوجد فواتير محفوظة</td></tr>';
+                        return;
+                    }
+
+                    userInvoices.forEach(inv => {
+                        list.innerHTML += `
+                            <tr class="hover:bg-slate-100 dark:hover:bg-slate-800/80 transition-colors">
+                                <td class="p-3 md:p-4 font-mono font-bold text-xs dark:text-white">${inv.id}</td>
+                                <td class="p-3 md:p-4 text-[10px] md:text-xs text-slate-500">${inv.date}</td>
+                                <td class="p-3 md:p-4 font-black text-sm text-indigo-600 dark:text-indigo-400">${inv.total.toFixed(2)}</td>
+                                <td class="p-3 md:p-4 text-center">
+                                    <button onclick="App.history.view('${inv.id}')" class="text-indigo-500 hover:text-indigo-700 p-1.5 md:p-2 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg"><i data-lucide="eye" class="w-4 h-4"></i></button>
+                                    <button onclick="App.history.delete('${inv.id}')" class="text-rose-500 hover:text-rose-700 p-1.5 md:p-2 bg-rose-50 dark:bg-rose-900/20 rounded-lg mr-1"><i data-lucide="trash" class="w-4 h-4"></i></button>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                    lucide.createIcons();
+                },
+
+                view(id) {
+                    const inv = DB.invoices.find(i => i.id === id);
+                    if (inv) {
+                        App.state.currentInvoiceId = inv.id;
+                        App.state.currentItems = [...inv.items];
+                        document.getElementById('current-invoice-id').innerText = inv.id;
+                        App.billing.updateUI();
+                        App.nav.switchTab('billing');
+                    }
+                },
+
+                delete(id) {
+                    if(confirm('هل أنت متأكد من حذف هذه الفاتورة نهائياً؟')) {
+                        DB.invoices = DB.invoices.filter(i => i.id !== id);
+                        this.render();
+                        if(App.state.currentInvoiceId === id) App.billing.startNew();
+                    }
+                }
+            },
+
+            ui: {
+                showAuth() {
+                    document.getElementById('auth-view').classList.remove('hidden');
+                    document.getElementById('app-view').classList.add('hidden');
+                },
+                
+                showApp() {
+                    document.getElementById('auth-view').classList.add('hidden');
+                    document.getElementById('app-view').classList.remove('hidden');
+                    document.getElementById('app-view').classList.add('flex');
+                    
+                    // Setup user data in UI
+                    const u = App.state.currentUser;
+                    document.getElementById('header-user-name').innerText = u.name;
+                    document.getElementById('acc-name').value = u.name;
+                    document.getElementById('acc-watermark').value = u.watermark || u.name;
+                    
+                    this.updateReceiptMeta();
+                    App.nav.switchTab('billing');
+                    App.billing.startNew();
+                },
+
+                updateReceiptMeta() {
+                    const u = App.state.currentUser;
+                    if(!u) return;
+                    document.getElementById('rec-store-name').innerText = u.name || 'x1'; 
+                    document.getElementById('rec-footer-name').innerText = `البائع: ${u.name}`;
+                    document.getElementById('rec-watermark').innerText = u.watermark || u.name;
+                },
+
+                saveAccountSettings() {
+                    const name = document.getElementById('acc-name').value;
+                    const watermark = document.getElementById('acc-watermark').value;
+                    
+                    if(name) {
+                        App.state.currentUser.name = name;
+                        App.state.currentUser.watermark = watermark || name;
+                        
+                        document.getElementById('header-user-name').innerText = name;
+                        this.updateReceiptMeta();
+                        alert('تم تحديث إعدادات الحساب!');
+                    }
+                },
+
+                toggleTheme() {
+                    const html = document.documentElement;
+                    const icon = document.getElementById('theme-icon');
+                    
+                    if (html.classList.contains('dark')) {
+                        html.classList.remove('dark');
+                        App.state.theme = 'light';
+                        icon.setAttribute('data-lucide', 'moon');
+                    } else {
+                        html.classList.add('dark');
+                        App.state.theme = 'dark';
+                        icon.setAttribute('data-lucide', 'sun');
+                    }
+                    lucide.createIcons();
+                }
+            },
+
+            print: {
+                doPrint() {
+                    if (App.state.currentItems.length === 0) {
+                        alert('لا يوجد عناصر لطباعتها!');
+                        return;
+                    }
+                    window.print();
+                },
+
+                doExport() {
+                    if (App.state.currentItems.length === 0) {
+                        alert('لا يوجد عناصر لتصديرها!');
+                        return;
+                    }
+                    
+                    const receipt = document.getElementById('printable-receipt');
+                    const origBorder = receipt.style.border;
+                    receipt.style.border = 'none'; // remove border for clean image
+                    
+                    html2canvas(receipt, {
+                        scale: 3, 
+                        backgroundColor: '#ffffff',
+                    }).then(canvas => {
+                        const link = document.createElement('a');
+                        link.download = `فاتورة-${App.state.currentInvoiceId}.png`;
+                        link.href = canvas.toDataURL('image/png');
+                        link.click();
+                        receipt.style.border = origBorder;
+                    });
+                }
+            }
+        };
+
+        // Initialize on Load
+        window.onload = () => App.init();
+
+    </script>
+</body>
+</html>
