@@ -15,22 +15,29 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: 18
+          node-version: 20
 
       - name: Set up Java
         uses: actions/setup-java@v3
         with:
           distribution: 'zulu'
-          java-version: '11'
+          java-version: '17'
 
-      - name: Install Dependencies
+      - name: Prepare Project
         run: |
-          npm install
-          npm install @capacitor/core @capacitor/cli @capacitor/android
+          if [ ! -f package.json ]; then
+            echo '{"name": "x1-app", "version": "1.0.0", "dependencies": {}}' > package.json
+          fi
+          npm install @capacitor/core@5 @capacitor/cli@5 @capacitor/android@5
 
       - name: Initialize Android Platform
         run: |
-          npx cap sync android || (npx cap add android && npx cap sync android)
+          if [ ! -f capacitor.config.json ]; then
+            echo '{"appId": "com.x1.app", "appName": "X1 System", "webDir": "."}' > capacitor.config.json
+          fi
+          rm -rf android
+          npx cap add android
+          npx cap sync android
 
       - name: Build APK (Debug Version)
         run: |
